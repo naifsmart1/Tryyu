@@ -19,7 +19,7 @@
 
 <body>
 <div class="card">
-  <h2>Scan QR → Append to Google Sheet</h2>
+  <h2>Scan QR → Google Sheet</h2>
   <p>Scans are written to your sheet's <strong>Scans</strong> tab.</p>
 
   <label>Select Camera:</label>
@@ -73,21 +73,7 @@ function onSuccess(decodedText){
   html5QrCode.pause();
   statusEl.textContent = "Scanned: " + decodedText;
 
-  let payloadObj = { raw: decodedText };
-
-  try {
-    const parsed = JSON.parse(decodedText);
-    if(parsed && typeof parsed === "object"){
-      payloadObj = Object.assign({ raw: decodedText }, parsed);
-    }
-  } catch(e){}
-
-  payloadObj.client = {
-    userAgent: navigator.userAgent,
-    timestamp_client_iso: new Date().toISOString()
-  };
-
-  sendPayload(payloadObj).finally(() => {
+  sendPayload({ raw: decodedText }).finally(() => {
     setTimeout(() => html5QrCode.resume(), 1200);
   });
 }
@@ -105,7 +91,6 @@ async function initScanner(){
       return;
     }
 
-    // Populate dropdown
     cameras.forEach(cam => {
       const opt = document.createElement("option");
       opt.value = cam.id;
@@ -113,10 +98,8 @@ async function initScanner(){
       cameraSelect.appendChild(opt);
     });
 
-    // Start scanner
     startCamera(cameras[0].id);
 
-    // Change camera on selection
     cameraSelect.onchange = () => {
       html5QrCode.stop().then(() => {
         startCamera(cameraSelect.value);
@@ -142,7 +125,6 @@ function startCamera(cameraId){
   });
 }
 
-// ✅ Start everything after page loads
 window.addEventListener("load", initScanner);
 </script>
 
