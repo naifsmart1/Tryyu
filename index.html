@@ -7,14 +7,14 @@
 
   <style>
     body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:16px}
-    #reader{width:100%;min-height:300px;background:#000;border-radius:8px}
+    #reader{width:100%;min-height:300px;background:#000;border-radius:8px;margin-top:10px}
     .card{max-width:900px;margin:auto;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.06);border-radius:10px}
-    pre{background:#f7f7f7;padding:10px;border-radius:6px}
-    button{padding:8px 12px;border-radius:6px;cursor:pointer}
-    select{padding:8px;border-radius:6px;margin-bottom:10px}
+    pre{background:#f7f7f7;padding:10px;border-radius:6px;white-space:pre-wrap}
+    button, select, input{padding:8px 12px;border-radius:6px;margin-top:8px}
   </style>
 
-  <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
+  <!-- ✅ Load QR library BEFORE your script -->
+  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
 </head>
 
 <body>
@@ -55,7 +55,7 @@ async function sendPayload(payload){
     });
 
     const data = await res.json();
-    statusEl.textContent = "Logged: " + JSON.stringify(data, null, 2);
+    statusEl.textContent = "Logged:\n" + JSON.stringify(data, null, 2);
   }catch(err){
     statusEl.textContent = "Send failed: " + err;
   }
