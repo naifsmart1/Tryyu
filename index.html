@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>QR Scan → Google Sheet</title>
+<title>QR Scanner</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 
 <style>
@@ -35,12 +35,12 @@
 <pre id="status">Waiting…</pre>
 
 <script>
-/* 🔴 PASTE YOUR APPS SCRIPT WEB APP URL HERE */
 const WEB_APP_URL = "PASTE_YOUR_WEB_APP_URL_HERE";
 
 const statusBox = document.getElementById("status");
 const startBtn = document.getElementById("startBtn");
-let qr;
+
+let qrScanner = null;
 
 function log(msg) {
   statusBox.textContent = msg;
@@ -56,7 +56,7 @@ async function sendToSheet(qrText) {
     const data = await res.json();
     log("Saved to sheet ✅\n" + JSON.stringify(data, null, 2));
   } catch (err) {
-    log("Error ❌\n" + err);
+    log("Send error ❌\n" + err);
   }
 }
 
@@ -64,42 +64,36 @@ startBtn.onclick = async () => {
   log("Requesting camera permission…");
 
   try {
-    // force permission popup
+    // Force permission popup
     const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach(t => t.stop());
 
     log("Camera permission granted ✅");
 
-    qr = new Html5Qrcode("reader");
-    const cams = await Html5Qrcode.getCameras();
+    qrScanner = new Html5Qrcode("reader");
+    const cameras = await Html5Qrcode.getCameras();
 
-    if (!cams.length) {
+    if (!cameras.length) {
       log("No camera found ❌");
       return;
     }
 
-    await qr.start(
-      cams[0].id,
+    await qrScanner.start(
+      cameras[0].id,
       { fps: 10, qrbox: 250 },
-      (decodedText) => {
+      async (decodedText) => {
         log("QR Scanned:\n" + decodedText);
-        qr.pause();
-        sendToSheet(decodedText);
-        setTimeout(() => qr.resume(), 2000);
+        qrScanner.pause();
+        await sendToSheet(decodedText);
+        setTimeout(() => qrScanner.resume(), 2000);
       }
     );
 
   } catch (err) {
-    log("Camera blocked ❌ : " + err.name);
+    log("Camera error ❌ : " + err.name + " - " + err.message);
   }
 };
 </script>
 
 </body>
-</html>  }
-}).catch(err => statusEl.textContent = 'Camera error: '+err);
-
-</script>
-  <footer>@Trytech.2025</footer>
-</body>
-</html>
+</html></html>
