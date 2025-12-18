@@ -3,131 +3,109 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>QR → Google Sheet Logger</title>
-
+  <title>QR → Google Sheet (log scans)</title>
   <style>
     body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:16px}
-    #reader{width:100%;min-height:300px;background:#000;border-radius:8px;margin-top:10px}
+    #reader{width:100%;min-height:320px;background:#000;border-radius:8px}
     .card{max-width:900px;margin:auto;padding:16px;box-shadow:0 6px 18px rgba(0,0,0,.06);border-radius:10px}
-    pre{background:#f7f7f7;padding:10px;border-radius:6px;white-space:pre-wrap}
-    button, select, input{padding:8px 12px;border-radius:6px;margin-top:8px}
+    pre{background:#f7f7f7;padding:10px;border-radius:6px}
+    button{padding:8px 12px;border-radius:6px}
+    footer{padding:30px 200px 0 135px}
   </style>
-
-  <!-- ✅ Load QR library BEFORE your script -->
-  <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+  <script src="https://unpkg.com/html5-qrcode@2.3.7/minified/html5-qrcode.min.js"></script>
 </head>
-
 <body>
-<div class="card">
-  <h2>Scan QR → Google Sheet</h2>
-  <p>Scans are written to your sheet's <strong>Scans</strong> tab.</p>
+  <div class="card">
+    <h2>Scan QR → Append to Google Sheet</h2>
+    <p>Scans are written to your sheet's <strong>Scans</strong> sheet with timestamp and raw data.</p>
 
-  <label>Select Camera:</label>
-  <select id="cameraSelect"></select>
+    <div id="reader"></div>
 
-  <div id="reader"></div>
+    <h3>Last action</h3>
+    <pre id="status">waiting for scan…</pre>
 
-  <h3>Last action</h3>
-  <pre id="status">Waiting for scan…</pre>
+    <p>Manual test: <input id="manual" placeholder="paste QR text here"/> <button id="sendManual">Send</button></p>
 
-  <p>
-    Manual test:
-    <input id="manual" placeholder="paste QR text here"/>
-    <button id="sendManual">Send</button>
-  </p>
-</div>
+    <p style="font-size:12px;color:#666">⚠️ Replace <code>WEB_APP_URL</code> below with your Apps Script web app URL after you deploy it.</p>
+  </div>
 
 <script>
-const WEB_APP_URL = "https://script.google.com/macros/s/AKfycbzvBzNakLeY3aMpyl_jPOE-RtvJF-BXJ1gPeVtrj7eq5KbAlXKQt0BPJFpxXYAr3A/exec"; // <-- paste your Apps Script URL
+const WEB_APP_URL = 'REPLACE_WITH_YOUR_WEB_APP_URL'; // <-- set this after deploying Apps Script
 
-const statusEl = document.getElementById("status");
-const cameraSelect = document.getElementById("cameraSelect");
-let html5QrCode;
+const statusEl = document.getElementById('status');
 
-// ✅ Send data to Google Apps Script
 async function sendPayload(payload){
   try{
-    statusEl.textContent = "Sending...";
+    statusEl.textContent = 'sending...';
     const res = await fetch(WEB_APP_URL, {
-      method: "POST",
-      headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ action: "log", payload })
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'log', payload })
     });
-
     const data = await res.json();
-    statusEl.textContent = "Logged:\n" + JSON.stringify(data, null, 2);
+    if(data && data.ok){
+      statusEl.textContent = 'Logged: ' + JSON.stringify(data, null, 2);
+    } else {
+      statusEl.textContent = 'Server error: ' + JSON.stringify(data);
+    }
   }catch(err){
-    statusEl.textContent = "Send failed: " + err;
+    statusEl.textContent = 'Send failed: ' + err;
+    console.error(err);
   }
 }
 
-// ✅ Manual send
-document.getElementById("sendManual").onclick = () => {
-  const v = document.getElementById("manual").value.trim();
-  if(!v) return alert("Enter text");
+// manual send
+document.getElementById('sendManual').onclick = ()=>{
+  const v = document.getElementById('manual').value.trim();
+  if(!v) return alert('Enter text');
   sendPayload({ raw: v });
 };
 
-// ✅ QR success handler
+// QR scanner
+const html5QrCode = new Html5Qrcode("reader");
+const config = { fps: 10, qrbox: { width: 300, height: 300 } };
+
 function onSuccess(decodedText){
+  // Pause to avoid duplicate reads
   html5QrCode.pause();
-  statusEl.textContent = "Scanned: " + decodedText;
+  statusEl.textContent = 'Scanned: ' + decodedText;
 
-  sendPayload({ raw: decodedText }).finally(() => {
-    setTimeout(() => html5QrCode.resume(), 1200);
-  });
-}
-
-// ✅ QR failure handler (ignored)
-function onFailure(err){}
-
-// ✅ Initialize camera list + scanner
-async function initScanner(){
+  // Try to parse JSON from QR if possible
+  let payloadObj = { raw: decodedText };
   try{
-    const cameras = await Html5Qrcode.getCameras();
-
-    if(!cameras.length){
-      statusEl.textContent = "No camera found";
-      return;
+    const parsed = JSON.parse(decodedText);
+    // if parsed is object, merge into payload
+    if(parsed && typeof parsed === 'object'){
+      payloadObj = Object.assign({ raw: decodedText }, parsed);
     }
+  }catch(e){ /* not JSON — keep raw */ }
 
-    cameras.forEach(cam => {
-      const opt = document.createElement("option");
-      opt.value = cam.id;
-      opt.textContent = cam.label || "Camera";
-      cameraSelect.appendChild(opt);
-    });
+  // add optional client info (you can remove)
+  payloadObj.client = {
+    userAgent: navigator.userAgent,
+    timestamp_client_iso: new Date().toISOString()
+  };
 
-    startCamera(cameras[0].id);
-
-    cameraSelect.onchange = () => {
-      html5QrCode.stop().then(() => {
-        startCamera(cameraSelect.value);
-      });
-    };
-
-  }catch(err){
-    statusEl.textContent = "Camera error: " + err;
-  }
-}
-
-// ✅ Start camera
-function startCamera(cameraId){
-  html5QrCode = new Html5Qrcode("reader");
-
-  html5QrCode.start(
-    cameraId,
-    { fps: 10, qrbox: { width: 280, height: 280 } },
-    onSuccess,
-    onFailure
-  ).catch(err => {
-    statusEl.textContent = "Camera start failed: " + err;
+  sendPayload(payloadObj).finally(()=> {
+    // resume scanning after short delay
+    setTimeout(()=> html5QrCode.resume(), 1200);
   });
 }
 
-window.addEventListener("load", initScanner);
-</script>
+function onFailure(err){
+  // ignore frequent failures
+}
 
-<footer style="padding:20px;text-align:center">@Trytech.2025</footer>
+Html5Qrcode.getCameras().then(cameras=>{
+  if(cameras && cameras.length){
+    html5QrCode.start(cameras[0].id, config, onSuccess, onFailure)
+      .catch(err => statusEl.textContent = 'Camera start failed: ' + err);
+  } else {
+    statusEl.textContent = 'No camera found';
+  }
+}).catch(err => statusEl.textContent = 'Camera error: '+err);
+
+</script>
+  <footer>@Trytech.2025</footer>
 </body>
 </html>
